@@ -1,6 +1,6 @@
 # tally - The `top` command for log streams
 
-[![CI](https://github.com/OWNER/tally/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/tally/actions/workflows/ci.yml)
+[![CI](https://github.com/albert-einshutoin/tally/actions/workflows/ci.yml/badge.svg)](https://github.com/albert-einshutoin/tally/actions/workflows/ci.yml)
 
 `tally` は標準入力のログをリアルタイムで集計し、頻出項目をランキング表示するCLIツールです。
 `sort | uniq -c | sort -nr` のように全件読み込み完了を待たず、実行直後から「今多いもの」を見られます。
