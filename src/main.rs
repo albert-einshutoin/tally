@@ -321,6 +321,7 @@ fn stdin_error_message(err: &io::Error) -> &'static str {
     }
 }
 
+#[cfg(test)]
 fn tally_from_input(input: &str, config: &Config) -> HashMap<String, usize> {
     let mut counts: HashMap<String, usize> = HashMap::new();
     for raw_line in input.split('\n') {
