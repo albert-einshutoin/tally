@@ -46,9 +46,13 @@ tail -f access.log | tally -f 3 -d ','
 ## オプション（予定含む）
 
 - `-f, --field <N>`: 区切り文字で分割したN番目の要素を集計
-- `-d, --delimiter <CHAR>`: 区切り文字を指定
-- `-n, --top <N>`: 上位N件のみ表示
-- `--interval <MS>`: 描画更新間隔（ミリ秒）
+- `-d, --delimiter <CHAR>`: 区切り文字を指定（1文字）
+- `-n, --top <N>`: 上位N件のみ表示（デフォルト: 10）
+- `--interval <MS>`: 描画更新間隔（ミリ秒、50〜2000に丸め）
+
+## 仕様メモ
+
+- UTF-8として処理し、不正なバイト列は置換して継続処理する
 
 ## 競合とポジショニング
 
@@ -85,6 +89,30 @@ cargo build --release
 # サンプル入力での簡易計測
 time cat samples/bench.log | ./target/release/tally -f 1 -d '=' -n 5 --interval 200 > /dev/null
 ```
+
+## 使用例
+
+```bash
+# 1) アクセスログの人気パス
+tail -f access.log | tally -f 7
+
+# 2) CSVの2列目を集計
+tail -f data.csv | tally -f 2 -d ','
+
+# 3) 上位5件だけ表示、更新間隔を短く
+tail -f access.log | tally -f 7 -n 5 --interval 100
+```
+
+## FAQ
+
+**Q. 出力が更新されません**  
+A. `--interval` が大きすぎないか確認してください。入力が流れているかも確認してください。
+
+**Q. 集計結果が期待と違います**  
+A. `-f` は1始まりです。区切りが空白か `-d` 指定か、連続区切り時の空フィールド扱いを確認してください。
+
+**Q. 文字化けします**  
+A. UTF-8以外の入力が混在していないか、`LC_ALL` の設定を確認してください。
 
 ## コントリビューション
 

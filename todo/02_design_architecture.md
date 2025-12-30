@@ -42,3 +42,22 @@
 
 ### 終了挙動
 - SIGINT/SIGTERMを捕捉し、最終ランキングをstdoutへ出力
+
+### インタラクティブ設計（v0.3.0案）
+- 入力処理は `crossterm` のイベントポーリングで非ブロッキング化
+- 描画は一定間隔のタイマー、入力は短いポーリング間隔で監視
+
+### 状態遷移（v0.3.0）
+- 状態: `running` / `paused` / `quitting`
+- `running` --(Space)--> `paused`
+- `paused` --(Space)--> `running`
+- `running` --(r)--> `running`（カウント初期化）
+- `paused` --(r)--> `paused`（カウント初期化）
+- `running` --(q)--> `quitting`
+- `paused` --(q)--> `quitting`
+
+### イベントループ（v0.3.0）
+- 入力ポーリング: 50ms間隔で `crossterm::event::poll`
+- 描画優先度: 入力（q/space/r）処理後に描画判定
+- 描画周期: `--interval` に従う（初回は即時描画）
+- stdin読み込み: 別スレッドで行単位に受信し、メインは非ブロッキングで処理

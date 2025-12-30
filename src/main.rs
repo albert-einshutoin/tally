@@ -2,8 +2,13 @@ use std::collections::HashMap;
 use std::env;
 use std::io::{self, BufRead, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{self, Receiver};
 use std::sync::Arc;
+use std::thread;
 use std::time::{Duration, Instant};
+
+use crossterm::event::{self, Event, KeyCode};
+use crossterm::terminal;
 use terminal_size::{terminal_size, Width};
 
 #[derive(Debug, Clone)]
@@ -36,7 +41,9 @@ fn main() {
     })
     .expect("failed to set Ctrl-C handler");
 
+    let _ = terminal::enable_raw_mode();
     let counts = process_stream(&config, &stop_flag);
+    let _ = terminal::disable_raw_mode();
     print_final(&counts, config.top);
 }
 
@@ -119,47 +126,131 @@ fn next_value<'a>(args: &'a [String], i: &mut usize, name: &str) -> Result<&'a s
 }
 
 fn print_usage() {
-    eprintln!(
+    let mut stderr = io::stderr();
+    let _ = write_usage(&mut stderr);
+}
+
+fn write_usage<W: Write>(mut out: W) -> io::Result<()> {
+    write!(
+        out,
         "Usage: tally [OPTIONS]\n\
          \n\
          Options:\n\
            -f, --field <N>       Field index (1-based)\n\
-           -d, --delimiter <C>   Delimiter character (default: space)\n\
+           -d, --delimiter <C>   Delimiter character (default: space, 1 char)\n\
            -n, --top <N>         Show top N entries (default: 10)\n\
-           --interval <MS>       Refresh interval in milliseconds (default: 200)\n\
+           --interval <MS>       Refresh interval in ms (default: 200, 50-2000)\n\
            -h, --help            Show this help\n"
-    );
+    )
 }
 
-fn process_stream(config: &Config, stop_flag: &AtomicBool) -> HashMap<String, usize> {
-    let stdin = io::stdin();
-    let mut reader = stdin.lock();
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RunState {
+    Running,
+    Paused,
+    Quitting,
+}
+
+impl RunState {
+    fn label(self) -> &'static str {
+        match self {
+            RunState::Running => "running",
+            RunState::Paused => "paused",
+            RunState::Quitting => "quitting",
+        }
+    }
+}
+
+fn process_stream(config: &Config, stop_flag: &Arc<AtomicBool>) -> HashMap<String, usize> {
+    let rx = spawn_reader(Arc::clone(stop_flag));
     let mut counts: HashMap<String, usize> = HashMap::new();
-    let mut line = String::new();
     let mut last_render = Instant::now();
     let mut rendered_once = false;
+    let mut state = RunState::Running;
 
     loop {
         if stop_flag.load(Ordering::SeqCst) {
             break;
         }
-        line.clear();
-        let bytes = reader.read_line(&mut line).expect("failed to read stdin");
-        if bytes == 0 {
+
+        while let Ok(line) = rx.try_recv() {
+            let trimmed = line.trim_end_matches(|c| c == '\n' || c == '\r');
+            update_counts(trimmed, config, &mut counts);
+        }
+
+        if event::poll(Duration::from_millis(50)).unwrap_or(false) {
+            if let Ok(Event::Key(key)) = event::read() {
+                match key.code {
+                    KeyCode::Char('q') => {
+                        state = RunState::Quitting;
+                        stop_flag.store(true, Ordering::SeqCst);
+                    }
+                    KeyCode::Char(' ') => {
+                        state = if state == RunState::Paused {
+                            RunState::Running
+                        } else {
+                            RunState::Paused
+                        };
+                        render_tui(&counts, config.top, state);
+                        last_render = Instant::now();
+                        rendered_once = true;
+                    }
+                    KeyCode::Char('r') => {
+                        counts.clear();
+                        render_tui(&counts, config.top, state);
+                        last_render = Instant::now();
+                        rendered_once = true;
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        if state == RunState::Quitting {
             break;
         }
 
-        let trimmed = line.trim_end_matches(|c| c == '\n' || c == '\r');
-        update_counts(trimmed, config, &mut counts);
-
-        if !rendered_once || last_render.elapsed() >= Duration::from_millis(config.interval_ms) {
-            render_tui(&counts, config.top);
+        if state == RunState::Running
+            && (!rendered_once || last_render.elapsed() >= Duration::from_millis(config.interval_ms))
+        {
+            render_tui(&counts, config.top, state);
             last_render = Instant::now();
             rendered_once = true;
         }
     }
 
     counts
+}
+
+fn spawn_reader(stop_flag: Arc<AtomicBool>) -> Receiver<String> {
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let stdin = io::stdin();
+        let mut reader = stdin.lock();
+        let mut buffer: Vec<u8> = Vec::new();
+        loop {
+            if stop_flag.load(Ordering::SeqCst) {
+                break;
+            }
+            buffer.clear();
+            let bytes = match reader.read_until(b'\n', &mut buffer) {
+                Ok(bytes) => bytes,
+                Err(_) => break,
+            };
+            if bytes == 0 {
+                break;
+            }
+            let line = decode_line(&buffer);
+            if tx.send(line).is_err() {
+                break;
+            }
+        }
+    });
+    rx
+}
+
+fn decode_line(bytes: &[u8]) -> String {
+    String::from_utf8_lossy(bytes).into_owned()
 }
 
 fn tally_from_input(input: &str, config: &Config) -> HashMap<String, usize> {
@@ -209,11 +300,11 @@ fn top_n(counts: &HashMap<String, usize>, limit: usize) -> Vec<(String, usize)> 
     entries
 }
 
-fn render_tui(counts: &HashMap<String, usize>, limit: usize) {
+fn render_tui(counts: &HashMap<String, usize>, limit: usize, state: RunState) {
     let top = top_n(counts, limit);
     let mut out = String::new();
     out.push_str("\x1b[2J\x1b[H");
-    out.push_str("tally (top)\n\n");
+    out.push_str(&format!("tally (top) [{}]\n\n", state.label()));
 
     if top.is_empty() {
         out.push_str("no data yet\n");
@@ -317,6 +408,70 @@ mod tests {
 
         assert_eq!(counts.get("b"), Some(&2));
         assert_eq!(counts.len(), 1);
+    }
+
+    #[test]
+    fn parse_rejects_invalid_field() {
+        let args = vec!["--field".to_string(), "0".to_string()];
+        let err = parse_args(&args).unwrap_err();
+        assert!(err.contains("field must be 1 or greater"));
+    }
+
+    #[test]
+    fn parse_rejects_empty_delimiter() {
+        let args = vec!["--delimiter".to_string(), "".to_string()];
+        let err = parse_args(&args).unwrap_err();
+        assert!(err.contains("delimiter must be a single character"));
+    }
+
+    #[test]
+    fn parse_rejects_multi_char_delimiter() {
+        let args = vec!["--delimiter".to_string(), "::".to_string()];
+        let err = parse_args(&args).unwrap_err();
+        assert!(err.contains("delimiter must be a single character"));
+    }
+
+    #[test]
+    fn parse_clamps_interval() {
+        let args = vec!["--interval".to_string(), "5".to_string()];
+        let config = parse_args(&args).expect("config");
+        assert_eq!(config.interval_ms, 50);
+    }
+
+    #[test]
+    fn parse_rejects_negative_field() {
+        let args = vec!["--field".to_string(), "-1".to_string()];
+        let err = parse_args(&args).unwrap_err();
+        assert!(err.contains("invalid value for --field"));
+    }
+
+    #[test]
+    fn extract_key_returns_none_for_large_field() {
+        let config = Config {
+            field: Some(99),
+            delimiter: DEFAULT_DELIMITER,
+            top: 10,
+            interval_ms: 200,
+        };
+        let key = extract_key("a b c", &config);
+        assert!(key.is_none());
+    }
+
+    #[test]
+    fn help_output_contains_defaults() {
+        let mut buffer = Vec::new();
+        write_usage(&mut buffer).expect("write");
+        let text = String::from_utf8(buffer).expect("utf8");
+        assert!(text.contains("default: 10"));
+        assert!(text.contains("50-2000"));
+    }
+
+    #[test]
+    fn decode_line_replaces_invalid_utf8() {
+        let bytes = vec![b'f', b'o', 0xff, b'o', b'\n'];
+        let line = decode_line(&bytes);
+        assert!(line.starts_with("fo"));
+        assert!(line.ends_with("o\n"));
     }
 
     #[test]

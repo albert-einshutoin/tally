@@ -8,4 +8,10 @@ All notable changes to this project will be documented in this file.
 - Use categories: Added, Changed, Fixed, Removed
 
 ## Unreleased
-- Initial project setup
+-
+
+## 0.3.0
+- Added: streaming aggregation with TUI rendering
+- Added: interactive controls (Space/pause, r/reset, q/quit)
+- Added: CLI options and boundary handling
+- Added: tests, CI, and documentation set
