@@ -70,13 +70,17 @@ Goal: Make installation easy for everyone.
 - [x] Reuse line buffers to reduce per-line allocations
 - [x] crates.io metadata prepared (Cargo.toml/README/LICENSE)
 - [ ] crates.io publish (manual)
+- [x] Table-based TUI (rank/count/percent/key)
+- [x] Fixed-width table layout (`--width`)
+- [x] ANSI color toggle (`--no-color`)
+- [x] Disable final text output (`--no-final`)
 
 #### v0.6.0: Package Managers
 - [ ] Homebrew tap
 - [ ] `cargo-binstall` support
 
 #### v0.7.0: Structured Data
-- [ ] JSON log parsing (`--json key`)
+- [x] JSON log parsing (`--json key`) (implemented early in v0.5)
 
 ---
 
@@ -192,13 +196,17 @@ Goal: Reliability under heavy load and long-running use.
 - [x] 行バッファ再利用によるアロケーション削減
 - [x] crates.ioメタデータ準備（Cargo.toml/README/LICENSE）
 - [ ] crates.io公開（手動）
+- [x] テーブル形式UI（順位/件数/割合/キー）
+- [x] テーブル幅固定（`--width`）
+- [x] ANSIカラー切替（`--no-color`）
+- [x] EOF後の最終テキスト出力を無効化（`--no-final`）
 
 #### v0.6.0: Package Managers
 - [ ] Homebrew Tap の作成 (`brew install tally`)
 - [ ] `cargo-binstall` 対応
 
 #### v0.7.0: Structured Data (The "Killer Feature")
-- [ ] JSONログのパース対応 (`--json key`)
+- [x] JSONログのパース対応 (`--json key`)（v0.5で先行実装）
     - 例: `tail -f app.log | tally --json level` でJSON内の特定キーを集計
 
 ---

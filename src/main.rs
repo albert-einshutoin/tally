@@ -20,12 +20,16 @@ struct Config {
     top: usize,
     interval_ms: u64,
     color_enabled: bool,
+    json_key: Option<String>,
+    table_width: usize,
+    no_final: bool,
 }
 
 const DEFAULT_TOP: usize = 10;
 const DEFAULT_INTERVAL_MS: u64 = 200;
 const DEFAULT_DELIMITER: char = ' ';
 const RESIZE_DEBOUNCE_MS: u64 = 200;
+const DEFAULT_TABLE_WIDTH: usize = 100;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -45,9 +49,12 @@ fn main() {
     })
     .expect("failed to set Ctrl-C handler");
 
-    let _raw_mode_guard = RawModeGuard::new();
-    let counts = process_stream(&config, &stop_flag);
-    print_final(&counts, config.top);
+    let interactive = is_interactive();
+    let _raw_mode_guard = RawModeGuard::new(interactive);
+    let counts = process_stream(&config, &stop_flag, interactive);
+    if !config.no_final {
+        print_final(&counts, config.top);
+    }
 }
 
 fn parse_args(args: &[String]) -> Result<Config, String> {
@@ -55,6 +62,10 @@ fn parse_args(args: &[String]) -> Result<Config, String> {
     let mut delimiter: char = DEFAULT_DELIMITER;
     let mut top: usize = DEFAULT_TOP;
     let mut interval_ms: u64 = DEFAULT_INTERVAL_MS;
+    let mut json_key: Option<String> = None;
+    let mut table_width: Option<usize> = None;
+    let mut no_color = false;
+    let mut no_final = false;
     let color_enabled = is_color_enabled();
 
     let mut i = 0;
@@ -105,6 +116,26 @@ fn parse_args(args: &[String]) -> Result<Config, String> {
                 }
                 interval_ms = parsed.clamp(50, 2000);
             }
+            "--no-color" => {
+                no_color = true;
+            }
+            "--json" => {
+                let value = next_value(args, &mut i, "json")?;
+                json_key = Some(value.to_string());
+            }
+            "--width" => {
+                let value = next_value(args, &mut i, "width")?;
+                let parsed = value.parse::<usize>().map_err(|_| {
+                    format!("invalid value for --width: {value}")
+                })?;
+                if parsed < 40 {
+                    return Err("width must be 40 or greater".to_string());
+                }
+                table_width = Some(parsed);
+            }
+            "--no-final" => {
+                no_final = true;
+            }
             unknown => {
                 return Err(format!("unknown option: {unknown}"));
             }
@@ -113,12 +144,17 @@ fn parse_args(args: &[String]) -> Result<Config, String> {
         i += 1;
     }
 
+    let table_width = table_width.unwrap_or_else(default_table_width);
+
     Ok(Config {
         field,
         delimiter,
         top,
         interval_ms,
-        color_enabled,
+        color_enabled: if no_color { false } else { color_enabled },
+        json_key,
+        table_width,
+        no_final,
     })
 }
 
@@ -145,6 +181,10 @@ fn write_usage<W: Write>(mut out: W) -> io::Result<()> {
            -d, --delimiter <C>   Delimiter character (default: space, 1 char)\n\
            -n, --top <N>         Show top N entries (default: 10)\n\
            --interval <MS>       Refresh interval in ms (default: 200, 50-2000)\n\
+           --no-color            Disable ANSI colors\n\
+           --json <KEY>          Aggregate JSON field (e.g. path)\n\
+           --width <N>           Fixed table width (min 40)\n\
+           --no-final            Disable final text output after EOF\n\
            -h, --help            Show this help\n"
     )
 }
@@ -166,7 +206,11 @@ impl RunState {
     }
 }
 
-fn process_stream(config: &Config, stop_flag: &Arc<AtomicBool>) -> HashMap<String, usize> {
+fn process_stream(
+    config: &Config,
+    stop_flag: &Arc<AtomicBool>,
+    interactive: bool,
+) -> HashMap<String, usize> {
     let (line_tx, line_rx) = mpsc::channel();
     let (pool_tx, pool_rx) = mpsc::channel();
     seed_buffer_pool(&pool_tx, 8);
@@ -191,7 +235,7 @@ fn process_stream(config: &Config, stop_flag: &Arc<AtomicBool>) -> HashMap<Strin
             let _ = pool_tx.send(buffer);
         }
 
-        if event::poll(Duration::from_millis(50)).unwrap_or(false) {
+        if interactive && event::poll(Duration::from_millis(50)).unwrap_or(false) {
             match event::read() {
                 Ok(Event::Key(key)) => match key.code {
                     KeyCode::Char('q') => {
@@ -204,9 +248,7 @@ fn process_stream(config: &Config, stop_flag: &Arc<AtomicBool>) -> HashMap<Strin
                         } else {
                             RunState::Paused
                         };
-                        if let Err(err) =
-                            render_tui(&counts, config.top, state, config.color_enabled)
-                        {
+                        if let Err(err) = render_tui(&counts, config.top, state, config) {
                             handle_render_error(err, stop_flag);
                             break;
                         }
@@ -215,9 +257,7 @@ fn process_stream(config: &Config, stop_flag: &Arc<AtomicBool>) -> HashMap<Strin
                     }
                     KeyCode::Char('r') => {
                         counts.clear();
-                        if let Err(err) =
-                            render_tui(&counts, config.top, state, config.color_enabled)
-                        {
+                        if let Err(err) = render_tui(&counts, config.top, state, config) {
                             handle_render_error(err, stop_flag);
                             break;
                         }
@@ -239,8 +279,11 @@ fn process_stream(config: &Config, stop_flag: &Arc<AtomicBool>) -> HashMap<Strin
             break;
         }
 
-        if pending_resize && last_resize.elapsed() >= Duration::from_millis(RESIZE_DEBOUNCE_MS) {
-            if let Err(err) = render_tui(&counts, config.top, state, config.color_enabled) {
+        if interactive
+            && pending_resize
+            && last_resize.elapsed() >= Duration::from_millis(RESIZE_DEBOUNCE_MS)
+        {
+            if let Err(err) = render_tui(&counts, config.top, state, config) {
                 handle_render_error(err, stop_flag);
                 break;
             }
@@ -252,13 +295,18 @@ fn process_stream(config: &Config, stop_flag: &Arc<AtomicBool>) -> HashMap<Strin
         if state == RunState::Running
             && (!rendered_once || last_render.elapsed() >= Duration::from_millis(config.interval_ms))
         {
-            if let Err(err) = render_tui(&counts, config.top, state, config.color_enabled) {
+            if let Err(err) = render_tui(&counts, config.top, state, config) {
                 handle_render_error(err, stop_flag);
                 break;
             }
             last_render = Instant::now();
             rendered_once = true;
         }
+    }
+
+    // Ensure at least one render for non-interactive (piped) input.
+    if !interactive {
+        let _ = render_tui(&counts, config.top, state, config);
     }
 
     counts
@@ -298,6 +346,7 @@ fn spawn_reader(
                 }
             };
             if bytes == 0 {
+                stop_flag.store(true, Ordering::SeqCst);
                 break;
             }
             if line_tx.send(buffer).is_err() {
@@ -341,6 +390,9 @@ fn update_counts(line: &str, config: &Config, counts: &mut HashMap<String, usize
 }
 
 fn extract_key(line: &str, config: &Config) -> Option<String> {
+    if let Some(key) = config.json_key.as_deref() {
+        return extract_json_key(line, key);
+    }
     let field_index = match config.field {
         None => return Some(line.to_string()),
         Some(value) => value,
@@ -373,12 +425,17 @@ fn render_tui(
     counts: &HashMap<String, usize>,
     limit: usize,
     state: RunState,
-    color_enabled: bool,
+    config: &Config,
 ) -> io::Result<()> {
     let top = top_n(counts, limit);
     let mut out = String::new();
     out.push_str("\x1b[2J\x1b[H");
-    out.push_str(&format!("tally (top) [{}]\n\n", state.label()));
+    let total = counts.values().sum::<usize>();
+    out.push_str(&format!(
+        "tally [ {} ]  total: {}\n",
+        state.label(),
+        total
+    ));
 
     if top.is_empty() {
         out.push_str("no data yet\n");
@@ -389,29 +446,84 @@ fn render_tui(
     }
 
     let max = top.first().map(|entry| entry.1).unwrap_or(0);
-    let cols = terminal_size()
-        .map(|(Width(w), _)| w as usize)
-        .unwrap_or(80);
-    let (bar_width, label_width) = layout_for_cols(cols);
-
-    for (key, count) in top {
-        let bar_len = if max == 0 {
-            0
-        } else {
-            (count * bar_width) / max
-        };
-        let bar = "#".repeat(bar_len);
-        let mut label = key;
-        if label.chars().count() > label_width {
-            let take_len = label_width.saturating_sub(3);
-            label = label.chars().take(take_len).collect::<String>() + "...";
-        }
-        let (color, reset) = bar_color(count, max, color_enabled);
+    let max_rank = top.len().max(1);
+    let rank_width = digits(max_rank);
+    let count_width = digits(max);
+    let layout = table_layout(config.table_width, rank_width, count_width);
+    let top_line = table_border(&layout, Border::Top);
+    let mid_line = table_border(&layout, Border::Mid);
+    let bot_line = table_border(&layout, Border::Bottom);
+    out.push_str(&top_line);
+    out.push('\n');
+    if layout.show_percent {
         out.push_str(&format!(
-            "{count:>8} | {color}{bar:<width$}{reset} {label}\n",
-            width = bar_width
+            "| {:>rw$} | {:>cw$} | {:>pw$} | {:<kw$} |\n",
+            "#",
+            "count",
+            "%",
+            "key",
+            rw = layout.rank_width,
+            cw = layout.count_width,
+            pw = layout.percent_width,
+            kw = layout.key_width
+        ));
+    } else {
+        out.push_str(&format!(
+            "| {:>rw$} | {:>cw$} | {:<kw$} |\n",
+            "#",
+            "count",
+            "key",
+            rw = layout.rank_width,
+            cw = layout.count_width,
+            kw = layout.key_width
         ));
     }
+    out.push_str(&mid_line);
+    out.push('\n');
+
+    for (idx, (key, count)) in top.into_iter().enumerate() {
+        let rank = idx + 1;
+        let percent = if total == 0 {
+            0.0
+        } else {
+            (count as f64) * 100.0 / (total as f64)
+        };
+        let mut label = key;
+        if label.chars().count() > layout.key_width {
+            let take_len = layout.key_width.saturating_sub(3);
+            label = if take_len == 0 {
+                "...".to_string()
+            } else {
+                label.chars().take(take_len).collect::<String>() + "..."
+            };
+        }
+        let (color, reset) = entry_color(count, max, config.color_enabled);
+        let count_str = format!("{color}{count:>cw$}{reset}", cw = layout.count_width);
+        if layout.show_percent {
+            out.push_str(&format!(
+                "| {:>rw$} | {} | {:>pw$.1} | {:<kw$} |\n",
+                rank,
+                count_str,
+                percent,
+                label,
+                rw = layout.rank_width,
+                pw = layout.percent_width,
+                kw = layout.key_width
+            ));
+        } else {
+            out.push_str(&format!(
+                "| {:>rw$} | {} | {:<kw$} |\n",
+                rank,
+                count_str,
+                label,
+                rw = layout.rank_width,
+                kw = layout.key_width
+            ));
+        }
+    }
+    out.push_str(&bot_line);
+    out.push('\n');
+    out.push_str("keys: q quit | space pause/resume | r reset\n");
 
     let mut stdout = io::stdout();
     stdout.write_all(out.as_bytes())?;
@@ -434,14 +546,7 @@ fn print_final(counts: &HashMap<String, usize>, limit: usize) {
     }
 }
 
-fn layout_for_cols(cols: usize) -> (usize, usize) {
-    let cols = cols.max(40);
-    let bar_width = cols.saturating_sub(28).clamp(10, 60);
-    let label_width = cols.saturating_sub(bar_width + 12).max(8);
-    (bar_width, label_width)
-}
-
-fn bar_color(count: usize, max: usize, color_enabled: bool) -> (&'static str, &'static str) {
+fn entry_color(count: usize, max: usize, color_enabled: bool) -> (&'static str, &'static str) {
     if !color_enabled || max == 0 {
         return ("", "");
     }
@@ -453,6 +558,87 @@ fn bar_color(count: usize, max: usize, color_enabled: bool) -> (&'static str, &'
     } else {
         ("\x1b[32m", "\x1b[0m")
     }
+}
+
+fn extract_json_key(line: &str, key: &str) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_str(line).ok()?;
+    let field = value.get(key)?;
+    Some(match field {
+        serde_json::Value::String(s) => s.to_string(),
+        other => other.to_string(),
+    })
+}
+
+struct TableLayout {
+    rank_width: usize,
+    count_width: usize,
+    percent_width: usize,
+    key_width: usize,
+    show_percent: bool,
+}
+
+fn table_layout(cols: usize, rank_width: usize, count_width: usize) -> TableLayout {
+    let cols = cols.max(40);
+    let percent_width = 5;
+    let base_with_percent = rank_width + count_width + percent_width + 13;
+    if cols >= base_with_percent + 8 {
+        return TableLayout {
+            rank_width,
+            count_width,
+            percent_width,
+            key_width: cols.saturating_sub(base_with_percent).max(8),
+            show_percent: true,
+        };
+    }
+    let base_no_percent = rank_width + count_width + 10;
+    TableLayout {
+        rank_width,
+        count_width,
+        percent_width,
+        key_width: cols.saturating_sub(base_no_percent).max(8),
+        show_percent: false,
+    }
+}
+
+enum Border {
+    Top,
+    Mid,
+    Bottom,
+}
+
+fn table_border(layout: &TableLayout, border: Border) -> String {
+    let (left, mid, right) = match border {
+        Border::Top => ("┌", "┬", "┐"),
+        Border::Mid => ("├", "┼", "┤"),
+        Border::Bottom => ("└", "┴", "┘"),
+    };
+    if layout.show_percent {
+        format!(
+            "{left}{:─<rw$}{mid}{:─<cw$}{mid}{:─<pw$}{mid}{:─<kw$}{right}",
+            "",
+            "",
+            "",
+            "",
+            rw = layout.rank_width + 2,
+            cw = layout.count_width + 2,
+            pw = layout.percent_width + 2,
+            kw = layout.key_width + 2
+        )
+    } else {
+        format!(
+            "{left}{:─<rw$}{mid}{:─<cw$}{mid}{:─<kw$}{right}",
+            "",
+            "",
+            "",
+            rw = layout.rank_width + 2,
+            cw = layout.count_width + 2,
+            kw = layout.key_width + 2
+        )
+    }
+}
+
+fn digits(value: usize) -> usize {
+    value.to_string().len().max(1)
 }
 
 fn handle_render_error(err: io::Error, stop_flag: &Arc<AtomicBool>) {
@@ -471,18 +657,35 @@ fn is_color_enabled() -> bool {
     env::var("NO_COLOR").is_err()
 }
 
-struct RawModeGuard;
+fn is_interactive() -> bool {
+    atty::is(atty::Stream::Stdin)
+}
+
+
+fn default_table_width() -> usize {
+    terminal_size()
+        .map(|(Width(w), _)| w as usize)
+        .unwrap_or(DEFAULT_TABLE_WIDTH)
+}
+
+struct RawModeGuard {
+    enabled: bool,
+}
 
 impl RawModeGuard {
-    fn new() -> Self {
-        let _ = terminal::enable_raw_mode();
-        RawModeGuard
+    fn new(enabled: bool) -> Self {
+        if enabled {
+            let _ = terminal::enable_raw_mode();
+        }
+        RawModeGuard { enabled }
     }
 }
 
 impl Drop for RawModeGuard {
     fn drop(&mut self) {
-        let _ = terminal::disable_raw_mode();
+        if self.enabled {
+            let _ = terminal::disable_raw_mode();
+        }
     }
 }
 
@@ -498,6 +701,8 @@ mod tests {
             top: 10,
             interval_ms: 200,
             color_enabled: true,
+            json_key: None,
+            table_width: 80,
         };
         let key = extract_key("alpha  beta  gamma", &config);
         assert_eq!(key.as_deref(), Some("beta"));
@@ -511,6 +716,8 @@ mod tests {
             top: 10,
             interval_ms: 200,
             color_enabled: true,
+            json_key: None,
+            table_width: 80,
         };
         let key = extract_key("a,,c", &config);
         assert_eq!(key.as_deref(), Some(""));
@@ -537,6 +744,8 @@ mod tests {
             top: 10,
             interval_ms: 200,
             color_enabled: true,
+            json_key: None,
+            table_width: 80,
         };
         let mut counts = HashMap::new();
         update_counts("", &config, &mut counts);
@@ -591,6 +800,8 @@ mod tests {
             top: 10,
             interval_ms: 200,
             color_enabled: true,
+            json_key: None,
+            table_width: 80,
         };
         let key = extract_key("a b c", &config);
         assert!(key.is_none());
@@ -627,6 +838,20 @@ mod tests {
     }
 
     #[test]
+    fn extract_json_key_string() {
+        let line = r#"{"path":"/auto/1","status":200}"#;
+        let value = extract_json_key(line, "path");
+        assert_eq!(value.as_deref(), Some("/auto/1"));
+    }
+
+    #[test]
+    fn extract_json_key_missing() {
+        let line = r#"{"path":"/auto/1","status":200}"#;
+        let value = extract_json_key(line, "missing");
+        assert!(value.is_none());
+    }
+
+    #[test]
     fn integration_access_log_top_paths() {
         let config = Config {
             field: Some(7),
@@ -634,6 +859,8 @@ mod tests {
             top: 3,
             interval_ms: 200,
             color_enabled: true,
+            json_key: None,
+            table_width: 80,
         };
         let input = include_str!("../samples/access.log");
         let counts = tally_from_input(input, &config);
@@ -651,6 +878,8 @@ mod tests {
             top: 3,
             interval_ms: 200,
             color_enabled: true,
+            json_key: None,
+            table_width: 80,
         };
         let input = include_str!("../samples/app.log");
         let counts = tally_from_input(input, &config);

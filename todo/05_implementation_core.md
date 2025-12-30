@@ -74,6 +74,11 @@ Without streaming aggregation and TUI, we cannot validate MVP value.
 
 ### Performance (v0.5.0)
 - [x] Reuse line buffers to reduce per-line allocations
+- [x] Table UI (rank/count/percent/key) without bars
+- [x] JSON key aggregation (`--json`)
+- [x] Fixed-width table layout (`--width`)
+- [x] ANSI color toggle (`--no-color`)
+- [x] Disable final text output (`--no-final`)
 
 ## 7. Spec Notes
 
@@ -166,6 +171,11 @@ MVPとして必要なストリーム集計とTUI表示が未整備だと、価�
 
 ### パフォーマンス（v0.5.0）
 - [x] 行バッファ再利用でアロケーションを削減
+- [x] バーなしテーブルUI（順位/件数/割合/キー）
+- [x] JSONキー集計（`--json`）
+- [x] テーブル幅固定（`--width`）
+- [x] ANSIカラー切替（`--no-color`）
+- [x] EOF後の最終テキスト出力を無効化（`--no-final`）
 
 ## 7. 仕様確定メモ
 

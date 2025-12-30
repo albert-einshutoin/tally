@@ -14,6 +14,9 @@ All notable changes to this project will be documented in this file.
 - Added: buffer reuse to reduce per-line allocations
 - Added: release automation prep for GitHub Releases
 - Added: crates.io publish readiness (metadata, docs)
+- Added: table-based TUI with rank/count/percent/key
+- Added: JSON key aggregation (`--json`)
+- Added: `--no-color` and fixed-width tables
 
 ## 0.4.0
 - Added: ANSI color bars with NO_COLOR support
@@ -44,6 +47,9 @@ All notable changes to this project will be documented in this file.
 - Added: 行バッファ再利用でアロケーション削減
 - Added: GitHub Releases向けの配布準備
 - Added: crates.io公開の事前準備（メタデータ/ドキュメント）
+- Added: テーブル形式UI（順位/件数/割合/キー）
+- Added: JSONキー集計（`--json`）
+- Added: `--no-color` とテーブル幅固定
 
 ## 0.4.0
 - Added: ANSIカラーのバー表示（NO_COLOR対応）

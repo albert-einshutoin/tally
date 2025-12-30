@@ -51,11 +51,17 @@ tail -f access.log | tally -f 3 -d ','
 - `-d, --delimiter <CHAR>`: Delimiter character (1 char)
 - `-n, --top <N>`: Show top N entries (default: 10)
 - `--interval <MS>`: Refresh interval in ms (clamped to 50–2000)
+- `--no-color`: Disable ANSI colors (overrides `NO_COLOR`)
+- `--json <KEY>`: Aggregate JSON key (e.g. `path`)
+- `--width <N>`: Fixed table width (min 40)
+- `--no-final`: Disable final text output after EOF
 
 ## Spec Notes
 
 - Input is processed as UTF-8; invalid bytes are replaced and processing continues
 - Set `NO_COLOR=1` to disable ANSI color output
+- Table width is fixed at startup unless `--width` is specified
+- Interactive keys are enabled only when stdin is a TTY
 
 ## Performance (quick check)
 
@@ -75,6 +81,9 @@ tail -f access.log | tally -f 7
 
 # 2) Second column in CSV
 tail -f data.csv | tally -f 2 -d ','
+
+# 3) JSON path aggregation
+cat /logs/access.log | tally --json path
 
 # 3) Top 5 with faster refresh
 tail -f access.log | tally -f 7 -n 5 --interval 100
@@ -182,11 +191,17 @@ tail -f access.log | tally -f 3 -d ','
 - `-d, --delimiter <CHAR>`: 区切り文字を指定（1文字）
 - `-n, --top <N>`: 上位N件のみ表示（デフォルト: 10）
 - `--interval <MS>`: 描画更新間隔（ミリ秒、50〜2000に丸め）
+- `--no-color`: ANSIカラーを無効化（`NO_COLOR` を上書き）
+- `--json <KEY>`: JSONのキーを集計（例: `path`）
+- `--width <N>`: テーブル幅を固定（最小40）
+- `--no-final`: EOF後の最終テキスト出力を無効化
 
 ## 仕様メモ
 
 - UTF-8として処理し、不正なバイト列は置換して継続処理する
 - `NO_COLOR=1` を設定するとANSIカラーを無効化できる
+- テーブル幅は起動時に固定され、`--width` で指定可能
+- インタラクティブ操作はstdinがTTYのときのみ有効
 
 ## 性能計測（簡易）
 
@@ -206,6 +221,9 @@ tail -f access.log | tally -f 7
 
 # 2) CSVの2列目を集計
 tail -f data.csv | tally -f 2 -d ','
+
+# 3) JSONのpathだけ集計
+cat /logs/access.log | tally --json path
 
 # 3) 上位5件だけ表示、更新間隔を短く
 tail -f access.log | tally -f 7 -n 5 --interval 100
