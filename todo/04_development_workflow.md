@@ -1,3 +1,26 @@
+# [DEV01] Development: Workflow / Docs Base
+
+## 1. Problem / Context
+To accept external contributions, we need reproducible dev setup and quality rules.
+
+## 2. Definition of Done
+- Local dev steps are reproducible
+- Coding standards and PR rules are documented
+- CI jobs are defined
+
+## 3. Action Items
+- [x] Add dev steps (build/run/test) to README
+- [x] Define coding standards (rustfmt/clippy)
+- [x] Define PR/Issue workflow rules
+- [x] Run build/test/lint in CI
+- [x] Create CONTRIBUTING guide skeleton
+
+## 4. References
+- README.md
+- ROADMAP.md
+
+---
+
 # [DEV01] 開発: ワークフロー/ドキュメント基盤
 
 ## 1. 課題・現状 (Problem/Context)

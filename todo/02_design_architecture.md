@@ -1,3 +1,69 @@
+# [D01] Design: Core Architecture / Data Flow
+
+## 1. Problem / Context
+If responsibilities between input, aggregation, and rendering are unclear, performance and maintainability suffer.
+
+## 2. Definition of Done
+- Input/aggregation/rendering responsibilities are separated
+- Data flow and refresh timing are documented
+- Public CLI behavior is defined
+
+## 3. Action Items
+- [x] Decide input pipeline (read/split/extract)
+- [x] Decide aggregation storage (hash/top N)
+- [x] Decide render loop (interval/diff)
+- [x] Finalize CLI options (-f, -d, -n, --interval)
+- [x] Define behavior on termination signals
+
+## 4. References
+- PRD.md
+- ROADMAP.md
+
+## 5. CLI Priority
+1. Required: `-f, --field`
+2. Required: `-d, --delimiter`
+3. Recommended: `-n, --top`
+4. Recommended: `--interval`
+
+## 6. Design Notes
+
+### Input Pipeline
+- Read stdin with buffering and process per line
+- Single-character delimiter, default is space
+- If `-f` is set, aggregate only the Nth field
+
+### Aggregation Storage
+- Use HashMap for counts, compute Top N on render
+- Simple full sort per render in MVP
+
+### Render Loop
+- Re-render every `--interval`
+- Clear & re-render first, optimize later
+
+### Termination
+- Capture SIGINT/SIGTERM and print final ranking to stdout
+
+### Interactive Design (v0.3.0)
+- Non-blocking input via `crossterm` event polling
+- Rendering via interval timer, input polled at short intervals
+
+### State Transitions (v0.3.0)
+- States: `running` / `paused` / `quitting`
+- `running` --(Space)--> `paused`
+- `paused` --(Space)--> `running`
+- `running` --(r)--> `running` (clear counts)
+- `paused` --(r)--> `paused` (clear counts)
+- `running` --(q)--> `quitting`
+- `paused` --(q)--> `quitting`
+
+### Event Loop (v0.3.0)
+- Input poll: every 50ms via `crossterm::event::poll`
+- Priority: handle input (q/space/r) before render decision
+- Render interval: `--interval`, render immediately on first draw
+- stdin reading: separate thread, non-blocking receive in main loop
+
+---
+
 # [D01] 設計: コアアーキテクチャ/データフロー
 
 ## 1. 課題・現状 (Problem/Context)

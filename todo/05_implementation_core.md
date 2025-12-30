@@ -1,3 +1,82 @@
+# [IMP01] Implementation: Core MVP & CLI
+
+## 1. Problem / Context
+Without streaming aggregation and TUI, we cannot validate MVP value.
+
+## 2. Definition of Done
+- stdin stream aggregation works
+- Top N updates in real time
+- CLI options work end-to-end
+
+## 3. Action Items
+- [x] Implement input reading and line splitting
+- [x] Implement field extraction (-f) and delimiter (-d)
+- [x] Implement aggregation storage and Top N
+- [x] Implement TUI rendering (ranking + bars)
+- [x] Implement final output on signal exit
+- [x] Implement CLI parsing
+
+## 4. References
+- PRD.md
+- ROADMAP.md
+
+## 5. Implementation Order (MVP)
+1. CLI parsing (`-f`, `-d`, `-n`, `--interval`)
+2. Input read + line split
+3. Field extraction + delimiter handling
+4. Aggregation + Top N
+5. TUI render loop
+6. Final output on exit
+
+## 6. Detailed Tasks
+
+### CLI
+- [x] `--field` 1-based indexing and boundary handling
+- [x] `--delimiter` single-char and default space
+- [x] `--top` default and upper bound
+- [x] `--interval` min/max clamp
+
+### Input / Extraction
+- [x] Decide and implement empty line/field handling
+- [x] Decide handling for consecutive delimiters
+- [x] Define UTF-8 behavior
+
+### Aggregation
+- [x] HashMap count updates
+- [x] Top N algorithm (full sort in MVP)
+- [x] Tie-break ordering
+
+### Rendering
+- [x] TUI ranking and bar rendering
+- [x] Clear & redraw strategy
+- [x] Bar length based on terminal width
+
+### Termination
+- [x] Safe exit on SIGINT/SIGTERM
+- [x] Final output format
+
+### Interactivity (v0.3.0)
+- [x] Non-blocking input (`crossterm` polling)
+- [x] `Space` pause/resume
+- [x] `r` reset counts
+- [x] `q` quit
+- [x] Show state (running/paused) in header
+
+## 7. Spec Notes
+
+### Input / Extraction
+- Default delimiter: space (`split_whitespace`), ignore consecutive whitespace
+- With `-d`, keep empty fields
+- Skip empty lines
+- Skip lines with missing field
+- Treat input as UTF-8 and replace invalid bytes
+
+### Top N
+- Full sort per render (MVP)
+- Sort by count desc, key asc
+
+---
+
 # [IMP01] 実装: コア機能(MVP)とCLI
 
 ## 1. 課題・現状 (Problem/Context)
@@ -69,7 +148,7 @@ MVPとして必要なストリーム集計とTUI表示が未整備だと、価�
 - 明示的な区切り文字 `-d` 指定時は1文字で分割し、空フィールドを保持
 - 空行はスキップする
 - 指定フィールドが存在しない行はスキップする
-- UTF-8として処理し、デコード失敗は置換扱い
+- UTF-8として処理し、不正バイトは置換扱い
 
 ### Top N
 - 描画タイミングごとに全件をVec化してソート（MVPは単純実装）

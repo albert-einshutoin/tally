@@ -1,3 +1,92 @@
+# [P01] OSS Product Definition and Scope
+
+## 1. Problem / Context
+Without a clear purpose, target users, and MVP scope, design/implementation/release decisions will drift.
+
+## 2. Definition of Done
+- Mission/value/target users are summarized succinctly
+- MVP in-scope/out-of-scope is clarified with reasons
+- Three primary use cases are defined
+- Success metrics and priorities are defined
+
+## 3. Action Items
+- [x] Summarize mission, value proposition, and target users
+- [x] Clarify MVP scope in/out with reasons
+- [x] Define three use cases with input examples
+- [x] Define success metrics for “experience/performance/onboarding”
+- [x] Define v0.x phases briefly
+
+## 4. References
+- README.md
+- ROADMAP.md
+- PRD.md
+
+## 5. Use Cases and Success Metrics
+
+### Use Cases
+1. Monitor popular paths in access logs
+   - Example: `tail -f access.log | cut -d ' ' -f 7 | tally`
+2. Detect spikes in error logs
+   - Example: `tail -f app.log | grep ERROR | tally`
+3. Monitor API status code distribution
+   - Example: `tail -f access.log | tally -f 9`
+
+### Success Metrics
+- Experience: render rankings within 2 seconds
+- Performance: sustain 10k lines/sec for 30 seconds
+- Onboarding: runnable within 10 minutes using README
+
+### Sample Logs
+- `samples/access.log`
+- `samples/app.log`
+
+## 6. One-page Summary
+
+### Mission
+Reduce waiting time and cognitive load in log analysis so users can see “what is happening now” in the terminal.
+
+### Value Proposition
+- Real-time aggregation for immediate insights
+- Simple pipe-based usage
+- Local-first, no extra infra
+
+### Target Users
+- SRE / Infrastructure engineers
+- Backend engineers
+- On-call responders
+
+## 7. MVP Scope with Rationale
+
+### Scope In (Why)
+- stdin streaming: essential entry point
+- In-memory aggregation: minimal cost, fast MVP
+- TUI Top N display: core differentiation
+- `-f` field selection: minimal cut/awk replacement
+- Final output on exit: reuse results
+
+### Scope Out (Why)
+- Disk-based aggregation: too heavy for MVP
+- Complex query language: higher learning cost
+- Log storage: not aligned with viewer role
+
+## 8. v0.x Phases (Short)
+- v0.1: MVP (streaming + TUI)
+- v0.2–0.5: usability (`-f/-d`/display options)
+- v0.6–0.7: distribution (binaries/Homebrew)
+- v0.8+: performance (speed/approx)
+
+## 9. OSS Documentation Set
+- `README.md`
+- `PRD.md`
+- `ROADMAP.md`
+- `LICENSE`
+- `CHANGELOG.md`
+- `CONTRIBUTING.md`
+- `CODE_OF_CONDUCT.md`
+- `SECURITY.md`
+
+---
+
 # [P01] OSS公開に向けたプロダクト定義とスコープ
 
 ## 1. 課題・現状 (Problem/Context)

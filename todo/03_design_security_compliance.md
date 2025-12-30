@@ -1,3 +1,42 @@
+# [D02] Design: Security / License / Dependency Policy
+
+## 1. Problem / Context
+OSS release requires license selection and dependency review. Skipping this is risky.
+
+## 2. Definition of Done
+- License policy is decided
+- Dependency license review policy exists
+- Security reporting channel and process are defined
+
+## 3. Action Items
+- [x] Compare license options (MIT/Apache-2.0) and decide
+- [x] Review dependency licenses and define policy
+- [x] Define security reporting channel and response flow
+- [x] Define privacy/log handling policy
+
+## 4. References
+- README.md
+- PRD.md
+
+## 5. Decisions & Policy
+
+### License
+- Adopt: MIT License (`LICENSE`)
+- Rationale: simple, widely adopted for early OSS
+
+### Dependencies
+- No dependencies at the moment (when policy was written)
+- Review license before adding dependencies
+
+### Security Contact
+- Contact is being prepared; temporary process in `SECURITY.md`
+
+### Privacy / Logs
+- stdin only; no network transmission or storage by default
+- See `SECURITY.md`
+
+---
+
 # [D02] 設計: セキュリティ/ライセンス/依存管理
 
 ## 1. 課題・現状 (Problem/Context)

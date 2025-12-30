@@ -1,3 +1,71 @@
+# [TEST01] Testing / Quality Assurance
+
+## 1. Problem / Context
+Streaming input varies by environment; weak tests make regressions hard to catch.
+
+## 2. Definition of Done
+- Unit tests cover core logic
+- Integration tests cover representative flows
+- Debugging guide exists
+
+## 3. Action Items
+- [x] Add unit tests for line split / field extraction
+- [x] Add unit tests for Top N
+- [x] Add integration tests for short streams
+- [x] Define quick perf benchmark method
+- [x] Create troubleshooting guide
+
+## 4. References
+- README.md
+- PRD.md
+
+## 5. Quick Performance Check
+
+### Goal
+- Sustain 10k lines/sec for 30 seconds
+
+### Preconditions
+- Local execution
+- Release build
+
+### Steps
+1. Build
+   - `cargo build --release`
+2. Generate input (300k lines)
+   - `seq 1 300000 | awk '{print "path=/api/v1/users"}' > /tmp/tally_bench.log`
+3. Measure
+   - `time cat /tmp/tally_bench.log | ./target/release/tally -f 1 -d '=' -n 5 --interval 200 > /dev/null`
+
+### Pass Criteria
+- real time <= 30 seconds
+- no crash
+
+## 6. Troubleshooting Guide
+
+### Input not read / stuck
+- Ensure stdin is open (`cat file | tally`)
+- Check trailing newline behavior
+
+### Output not refreshing
+- Check if `--interval` is too large
+- Confirm input is flowing (`pv`)
+
+### Aggregation incorrect
+- `-f` is 1-based
+- Check delimiter settings
+- Confirm behavior with consecutive delimiters
+
+### Mojibake
+- Ensure UTF-8 input
+- Check `LC_ALL`
+
+## 7. Phase 2 Test Items
+- [x] Boundary tests for `-f` (0/negative/large)
+- [x] `-d` single-char/empty/multi-char errors
+- [x] `--help` content (options/defaults)
+
+---
+
 # [TEST01] テスト/品質保証
 
 ## 1. 課題・現状 (Problem/Context)
@@ -14,11 +82,6 @@
 - [x] 短いストリームを用いた統合テストを追加する
 - [x] 性能の簡易ベンチ/計測方法を整理する
 - [x] 失敗時の切り分けガイドを用意する
-
-## 7. Phase 2向けテスト項目
-- [x] `-f` の境界値テスト（0/負数/大きい値）
-- [x] `-d` の1文字制約/空文字/複数文字のエラー確認
-- [x] `--help` の表示内容（オプション一覧/既定値）
 
 ## 4. 参考・メモ (References)
 - README.md
@@ -63,3 +126,8 @@
 ### 文字化けする
 - UTF-8以外の入力が混在していないか確認
 - `LC_ALL` の設定を確認
+
+## 7. Phase 2向けテスト項目
+- [x] `-f` の境界値テスト（0/負数/大きい値）
+- [x] `-d` の1文字制約/空文字/複数文字のエラー確認
+- [x] `--help` の表示内容（オプション一覧/既定値）

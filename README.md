@@ -2,6 +2,134 @@
 
 [![CI](https://github.com/albert-einshutoin/tally/actions/workflows/ci.yml/badge.svg)](https://github.com/albert-einshutoin/tally/actions/workflows/ci.yml)
 
+`tally` aggregates log lines from stdin in real time and shows a ranked top list.
+Unlike `sort | uniq -c | sort -nr`, you can see “what’s hot right now” as the stream flows.
+
+## Features
+
+- Real-time aggregation: continuously updated Top N while the stream is flowing
+- TUI display: bar-chart ranking in the terminal
+- Fast: Rust-based and optimized for high throughput
+- Simple: works as a drop-in pipe with no query language
+
+## Use Cases
+
+- Live monitoring of popular paths in access logs
+- Detect spikes in error levels or messages
+- First-pass troubleshooting for fast-moving logs
+
+## Installation
+
+```bash
+# Cargo (Rust)
+cargo install tally
+
+# Homebrew / binary releases are planned
+```
+
+## Usage
+
+```bash
+tail -f access.log | cut -d ' ' -f 7 | tally
+```
+
+### Field selection (no need for cut)
+
+```bash
+# 7th field (space-separated)
+tail -f access.log | tally -f 7
+
+# 3rd field (comma-separated)
+tail -f access.log | tally -f 3 -d ','
+```
+
+## Options (some planned)
+
+- `-f, --field <N>`: Aggregate the Nth field after splitting
+- `-d, --delimiter <CHAR>`: Delimiter character (1 char)
+- `-n, --top <N>`: Show top N entries (default: 10)
+- `--interval <MS>`: Refresh interval in ms (clamped to 50–2000)
+
+## Spec Notes
+
+- Input is processed as UTF-8; invalid bytes are replaced and processing continues
+
+## Performance (quick check)
+
+```bash
+# Release build
+cargo build --release
+
+# Quick check with sample input
+time cat samples/bench.log | ./target/release/tally -f 1 -d '=' -n 5 --interval 200 > /dev/null
+```
+
+## Examples
+
+```bash
+# 1) Popular paths in access log
+tail -f access.log | tally -f 7
+
+# 2) Second column in CSV
+tail -f data.csv | tally -f 2 -d ','
+
+# 3) Top 5 with faster refresh
+tail -f access.log | tally -f 7 -n 5 --interval 100
+```
+
+## FAQ
+
+**Q. The output does not refresh**  
+A. Check if `--interval` is too large and whether input is actually flowing.
+
+**Q. The aggregation looks wrong**  
+A. `-f` is 1-based. Check delimiter settings and how consecutive delimiters are treated.
+
+**Q. I see mojibake**  
+A. Ensure the input is UTF-8; verify your `LC_ALL`.
+
+## Development
+
+```bash
+# Build
+cargo build
+
+# Test
+cargo test
+
+# Format
+cargo fmt
+
+# Lint
+cargo clippy
+```
+
+## Contributing
+
+- Review `ROADMAP.md` and `PRD.md` first
+- See `CONTRIBUTING.md` for development workflow and rules
+
+## Documents
+
+- `CONTRIBUTING.md`
+- `CODE_OF_CONDUCT.md`
+- `SECURITY.md`
+- `CHANGELOG.md`
+- `RELEASE.md`
+- `LICENSE`
+
+## License
+
+- MIT License (`LICENSE`)
+
+## Security
+
+- See `SECURITY.md` for reporting
+
+---
+
+# tally - The `top` command for log streams (日本語)
+
 `tally` は標準入力のログをリアルタイムで集計し、頻出項目をランキング表示するCLIツールです。
 `sort | uniq -c | sort -nr` のように全件読み込み完了を待たず、実行直後から「今多いもの」を見られます。
 
@@ -54,32 +182,6 @@ tail -f access.log | tally -f 3 -d ','
 
 - UTF-8として処理し、不正なバイト列は置換して継続処理する
 
-## 競合とポジショニング
-
-`tally` は「リアルタイム性」と「学習コストの低さ」を両立します。
-
-| ツール | リアルタイム性 | 学習コスト | 表示 | 備考 |
-| --- | --- | --- | --- | --- |
-| tally | 高い | 低い | TUI | パイプで利用 |
-| sort | uniq | 低い | 低い | テキスト | 完了待ち |
-| angle-grinder | 高い | 高い | TUI | 高機能 |
-
-## 開発
-
-```bash
-# ビルド
-cargo build
-
-# テスト
-cargo test
-
-# フォーマット
-cargo fmt
-
-# リント
-cargo clippy
-```
-
 ## 性能計測（簡易）
 
 ```bash
@@ -113,6 +215,22 @@ A. `-f` は1始まりです。区切りが空白か `-d` 指定か、連続区�
 
 **Q. 文字化けします**  
 A. UTF-8以外の入力が混在していないか、`LC_ALL` の設定を確認してください。
+
+## 開発
+
+```bash
+# ビルド
+cargo build
+
+# テスト
+cargo test
+
+# フォーマット
+cargo fmt
+
+# リント
+cargo clippy
+```
 
 ## コントリビューション
 

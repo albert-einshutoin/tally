@@ -1,3 +1,38 @@
+# [REL01] Release / Publication / Operations
+
+## 1. Problem / Context
+OSS release requires release flow, documentation, and support process.
+
+## 2. Definition of Done
+- Release procedure and versioning defined
+- Core docs are available
+- Post-release support policy defined
+
+## 3. Action Items
+- [x] Define release flow (tag/version/distribution)
+- [x] Update README/FAQ/examples
+- [x] Define CHANGELOG policy
+- [x] Prepare Issue/PR templates
+- [x] Define post-release support/maintenance policy
+
+## 4. References
+- README.md
+- ROADMAP.md
+
+## 5. README/FAQ/Examples Update Policy
+- README: clearly distinguish implemented vs planned features
+- README: add examples using `samples/`
+- FAQ: quick Q/A for stuck output or wrong results
+- Examples: combinations of `-f`/`-d`/`-n`/`--interval`
+
+## 6. Post-release Support Policy
+- Support channel: GitHub Issues (labels `question`/`bug`/`enhancement`)
+- Response target: first response within 1 week
+- Bug fixes: prioritize high severity, batch minor fixes
+- Security: follow `SECURITY.md`
+
+---
+
 # [REL01] リリース/公開/運用
 
 ## 1. 課題・現状 (Problem/Context)
