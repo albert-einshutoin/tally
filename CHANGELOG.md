@@ -10,6 +10,11 @@ All notable changes to this project will be documented in this file.
 ## Unreleased
 -
 
+## 0.4.0
+- Added: ANSI color bars with NO_COLOR support
+- Added: resize redraw debounce
+- Changed: stronger stdin/stdout error handling
+
 ## 0.3.0
 - Added: streaming aggregation with TUI rendering
 - Added: interactive controls (Space/pause, r/reset, q/quit)
@@ -29,6 +34,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 -
+
+## 0.4.0
+- Added: ANSIカラーのバー表示（NO_COLOR対応）
+- Added: リサイズ再描画のデバウンス
+- Changed: stdin/stdoutのエラーハンドリング強化
 
 ## 0.3.0
 - Added: ストリーム集計とTUI描画

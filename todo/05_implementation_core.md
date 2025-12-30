@@ -62,6 +62,16 @@ Without streaming aggregation and TUI, we cannot validate MVP value.
 - [x] `q` quit
 - [x] Show state (running/paused) in header
 
+### Stability (v0.4.0)
+- [x] Handle BrokenPipe safely
+- [x] Restore raw mode on drop
+- [x] Permission/read error messaging
+- [x] Redraw on terminal resize
+- [x] Color output for bars
+- [x] Layout optimization for narrow terminals
+- [x] NO_COLOR support to disable ANSI output
+- [x] Debounce resize redraws
+
 ## 7. Spec Notes
 
 ### Input / Extraction
@@ -140,6 +150,16 @@ MVPとして必要なストリーム集計とTUI表示が未整備だと、価�
 - [x] `r` でカウント初期化
 - [x] `q` で終了
 - [x] 状態表示（running/paused）をヘッダーに反映
+
+### 安定性（v0.4.0）
+- [x] stdoutのBrokenPipeを安全に扱う
+- [x] raw modeをDropで確実に復元する
+- [x] 権限/読み取りエラーのユーザー向けメッセージ整備
+- [x] 端末リサイズ時の再描画
+- [x] バーチャートのカラー出力
+- [x] 狭い端末幅でのレイアウト調整
+- [x] NO_COLORでANSI出力を無効化
+- [x] リサイズ再描画のデバウンス
 
 ## 7. 仕様確定メモ
 

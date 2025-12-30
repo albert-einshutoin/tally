@@ -64,6 +64,10 @@ Streaming input varies by environment; weak tests make regressions hard to catch
 - [x] `-d` single-char/empty/multi-char errors
 - [x] `--help` content (options/defaults)
 
+## 8. v0.4.0 Stability Tests
+- [x] Exception handling for PermissionDenied in stdin
+- [x] BrokenPipe handling for stdout
+
 ---
 
 # [TEST01] テスト/品質保証
@@ -131,3 +135,7 @@ Streaming input varies by environment; weak tests make regressions hard to catch
 - [x] `-f` の境界値テスト（0/負数/大きい値）
 - [x] `-d` の1文字制約/空文字/複数文字のエラー確認
 - [x] `--help` の表示内容（オプション一覧/既定値）
+
+## 8. v0.4.0安定性テスト
+- [x] stdinのPermissionDenied例外ハンドリング
+- [x] stdoutのBrokenPipeハンドリング

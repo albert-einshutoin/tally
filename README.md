@@ -53,6 +53,7 @@ tail -f access.log | tally -f 3 -d ','
 ## Spec Notes
 
 - Input is processed as UTF-8; invalid bytes are replaced and processing continues
+- Set `NO_COLOR=1` to disable ANSI color output
 
 ## Performance (quick check)
 
@@ -181,6 +182,7 @@ tail -f access.log | tally -f 3 -d ','
 ## 仕様メモ
 
 - UTF-8として処理し、不正なバイト列は置換して継続処理する
+- `NO_COLOR=1` を設定するとANSIカラーを無効化できる
 
 ## 性能計測（簡易）
 

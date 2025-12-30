@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::env;
 use std::io::{self, BufRead, Write};
+use std::process;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver};
 use std::sync::Arc;
@@ -17,11 +18,13 @@ struct Config {
     delimiter: char,
     top: usize,
     interval_ms: u64,
+    color_enabled: bool,
 }
 
 const DEFAULT_TOP: usize = 10;
 const DEFAULT_INTERVAL_MS: u64 = 200;
 const DEFAULT_DELIMITER: char = ' ';
+const RESIZE_DEBOUNCE_MS: u64 = 200;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -41,9 +44,8 @@ fn main() {
     })
     .expect("failed to set Ctrl-C handler");
 
-    let _ = terminal::enable_raw_mode();
+    let _raw_mode_guard = RawModeGuard::new();
     let counts = process_stream(&config, &stop_flag);
-    let _ = terminal::disable_raw_mode();
     print_final(&counts, config.top);
 }
 
@@ -52,6 +54,7 @@ fn parse_args(args: &[String]) -> Result<Config, String> {
     let mut delimiter: char = DEFAULT_DELIMITER;
     let mut top: usize = DEFAULT_TOP;
     let mut interval_ms: u64 = DEFAULT_INTERVAL_MS;
+    let color_enabled = is_color_enabled();
 
     let mut i = 0;
     while i < args.len() {
@@ -114,6 +117,7 @@ fn parse_args(args: &[String]) -> Result<Config, String> {
         delimiter,
         top,
         interval_ms,
+        color_enabled,
     })
 }
 
@@ -167,6 +171,8 @@ fn process_stream(config: &Config, stop_flag: &Arc<AtomicBool>) -> HashMap<Strin
     let mut last_render = Instant::now();
     let mut rendered_once = false;
     let mut state = RunState::Running;
+    let mut pending_resize = false;
+    let mut last_resize = Instant::now();
 
     loop {
         if stop_flag.load(Ordering::SeqCst) {
@@ -179,8 +185,8 @@ fn process_stream(config: &Config, stop_flag: &Arc<AtomicBool>) -> HashMap<Strin
         }
 
         if event::poll(Duration::from_millis(50)).unwrap_or(false) {
-            if let Ok(Event::Key(key)) = event::read() {
-                match key.code {
+            match event::read() {
+                Ok(Event::Key(key)) => match key.code {
                     KeyCode::Char('q') => {
                         state = RunState::Quitting;
                         stop_flag.store(true, Ordering::SeqCst);
@@ -191,18 +197,34 @@ fn process_stream(config: &Config, stop_flag: &Arc<AtomicBool>) -> HashMap<Strin
                         } else {
                             RunState::Paused
                         };
-                        render_tui(&counts, config.top, state);
+                        if let Err(err) =
+                            render_tui(&counts, config.top, state, config.color_enabled)
+                        {
+                            handle_render_error(err, stop_flag);
+                            break;
+                        }
                         last_render = Instant::now();
                         rendered_once = true;
                     }
                     KeyCode::Char('r') => {
                         counts.clear();
-                        render_tui(&counts, config.top, state);
+                        if let Err(err) =
+                            render_tui(&counts, config.top, state, config.color_enabled)
+                        {
+                            handle_render_error(err, stop_flag);
+                            break;
+                        }
                         last_render = Instant::now();
                         rendered_once = true;
                     }
                     _ => {}
+                },
+                Ok(Event::Resize(_, _)) => {
+                    pending_resize = true;
+                    last_resize = Instant::now();
                 }
+                Ok(_) => {}
+                Err(_) => {}
             }
         }
 
@@ -210,10 +232,23 @@ fn process_stream(config: &Config, stop_flag: &Arc<AtomicBool>) -> HashMap<Strin
             break;
         }
 
+        if pending_resize && last_resize.elapsed() >= Duration::from_millis(RESIZE_DEBOUNCE_MS) {
+            if let Err(err) = render_tui(&counts, config.top, state, config.color_enabled) {
+                handle_render_error(err, stop_flag);
+                break;
+            }
+            pending_resize = false;
+            last_render = Instant::now();
+            rendered_once = true;
+        }
+
         if state == RunState::Running
             && (!rendered_once || last_render.elapsed() >= Duration::from_millis(config.interval_ms))
         {
-            render_tui(&counts, config.top, state);
+            if let Err(err) = render_tui(&counts, config.top, state, config.color_enabled) {
+                handle_render_error(err, stop_flag);
+                break;
+            }
             last_render = Instant::now();
             rendered_once = true;
         }
@@ -235,7 +270,16 @@ fn spawn_reader(stop_flag: Arc<AtomicBool>) -> Receiver<String> {
             buffer.clear();
             let bytes = match reader.read_until(b'\n', &mut buffer) {
                 Ok(bytes) => bytes,
-                Err(_) => break,
+                Err(err) => {
+                    let message = stdin_error_message(&err);
+                    if err.kind() == io::ErrorKind::PermissionDenied {
+                        eprintln!("{message}");
+                    } else {
+                        eprintln!("{message}: {err}");
+                    }
+                    stop_flag.store(true, Ordering::SeqCst);
+                    break;
+                }
             };
             if bytes == 0 {
                 break;
@@ -251,6 +295,15 @@ fn spawn_reader(stop_flag: Arc<AtomicBool>) -> Receiver<String> {
 
 fn decode_line(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).into_owned()
+}
+
+fn stdin_error_message(err: &io::Error) -> &'static str {
+    match err.kind() {
+        io::ErrorKind::PermissionDenied => {
+            "stdin permission denied: check input source permissions"
+        }
+        _ => "stdin read error",
+    }
 }
 
 fn tally_from_input(input: &str, config: &Config) -> HashMap<String, usize> {
@@ -300,7 +353,12 @@ fn top_n(counts: &HashMap<String, usize>, limit: usize) -> Vec<(String, usize)> 
     entries
 }
 
-fn render_tui(counts: &HashMap<String, usize>, limit: usize, state: RunState) {
+fn render_tui(
+    counts: &HashMap<String, usize>,
+    limit: usize,
+    state: RunState,
+    color_enabled: bool,
+) -> io::Result<()> {
     let top = top_n(counts, limit);
     let mut out = String::new();
     out.push_str("\x1b[2J\x1b[H");
@@ -309,17 +367,16 @@ fn render_tui(counts: &HashMap<String, usize>, limit: usize, state: RunState) {
     if top.is_empty() {
         out.push_str("no data yet\n");
         let mut stdout = io::stdout();
-        let _ = stdout.write_all(out.as_bytes());
-        let _ = stdout.flush();
-        return;
+        stdout.write_all(out.as_bytes())?;
+        stdout.flush()?;
+        return Ok(());
     }
 
     let max = top.first().map(|entry| entry.1).unwrap_or(0);
     let cols = terminal_size()
         .map(|(Width(w), _)| w as usize)
         .unwrap_or(80);
-    let bar_width = cols.saturating_sub(28).clamp(10, 60);
-    let label_width = cols.saturating_sub(bar_width + 12).max(8);
+    let (bar_width, label_width) = layout_for_cols(cols);
 
     for (key, count) in top {
         let bar_len = if max == 0 {
@@ -333,21 +390,83 @@ fn render_tui(counts: &HashMap<String, usize>, limit: usize, state: RunState) {
             let take_len = label_width.saturating_sub(3);
             label = label.chars().take(take_len).collect::<String>() + "...";
         }
+        let (color, reset) = bar_color(count, max, color_enabled);
         out.push_str(&format!(
-            "{count:>8} | {bar:<width$} {label}\n",
+            "{count:>8} | {color}{bar:<width$}{reset} {label}\n",
             width = bar_width
         ));
     }
 
     let mut stdout = io::stdout();
-    let _ = stdout.write_all(out.as_bytes());
-    let _ = stdout.flush();
+    stdout.write_all(out.as_bytes())?;
+    stdout.flush()?;
+    Ok(())
 }
 
 fn print_final(counts: &HashMap<String, usize>, limit: usize) {
     let top = top_n(counts, limit);
+    let stdout = io::stdout();
+    let mut handle = stdout.lock();
     for (key, count) in top {
-        println!("{count}\t{key}");
+        if let Err(err) = writeln!(handle, "{count}\t{key}") {
+            if err.kind() == io::ErrorKind::BrokenPipe {
+                process::exit(0);
+            }
+            eprintln!("stdout write error: {err}");
+            process::exit(1);
+        }
+    }
+}
+
+fn layout_for_cols(cols: usize) -> (usize, usize) {
+    let cols = cols.max(40);
+    let bar_width = cols.saturating_sub(28).clamp(10, 60);
+    let label_width = cols.saturating_sub(bar_width + 12).max(8);
+    (bar_width, label_width)
+}
+
+fn bar_color(count: usize, max: usize, color_enabled: bool) -> (&'static str, &'static str) {
+    if !color_enabled || max == 0 {
+        return ("", "");
+    }
+    let ratio = count as f64 / max as f64;
+    if ratio > 0.66 {
+        ("\x1b[31m", "\x1b[0m")
+    } else if ratio > 0.33 {
+        ("\x1b[33m", "\x1b[0m")
+    } else {
+        ("\x1b[32m", "\x1b[0m")
+    }
+}
+
+fn handle_render_error(err: io::Error, stop_flag: &Arc<AtomicBool>) {
+    if should_exit_on_broken_pipe(err.kind()) {
+        process::exit(0);
+    }
+    eprintln!("stdout write error: {err}");
+    stop_flag.store(true, Ordering::SeqCst);
+}
+
+fn should_exit_on_broken_pipe(kind: io::ErrorKind) -> bool {
+    kind == io::ErrorKind::BrokenPipe
+}
+
+fn is_color_enabled() -> bool {
+    env::var("NO_COLOR").is_err()
+}
+
+struct RawModeGuard;
+
+impl RawModeGuard {
+    fn new() -> Self {
+        let _ = terminal::enable_raw_mode();
+        RawModeGuard
+    }
+}
+
+impl Drop for RawModeGuard {
+    fn drop(&mut self) {
+        let _ = terminal::disable_raw_mode();
     }
 }
 
@@ -362,6 +481,7 @@ mod tests {
             delimiter: DEFAULT_DELIMITER,
             top: 10,
             interval_ms: 200,
+            color_enabled: true,
         };
         let key = extract_key("alpha  beta  gamma", &config);
         assert_eq!(key.as_deref(), Some("beta"));
@@ -374,6 +494,7 @@ mod tests {
             delimiter: ',',
             top: 10,
             interval_ms: 200,
+            color_enabled: true,
         };
         let key = extract_key("a,,c", &config);
         assert_eq!(key.as_deref(), Some(""));
@@ -399,6 +520,7 @@ mod tests {
             delimiter: DEFAULT_DELIMITER,
             top: 10,
             interval_ms: 200,
+            color_enabled: true,
         };
         let mut counts = HashMap::new();
         update_counts("", &config, &mut counts);
@@ -452,6 +574,7 @@ mod tests {
             delimiter: DEFAULT_DELIMITER,
             top: 10,
             interval_ms: 200,
+            color_enabled: true,
         };
         let key = extract_key("a b c", &config);
         assert!(key.is_none());
@@ -475,12 +598,26 @@ mod tests {
     }
 
     #[test]
+    fn stdin_permission_message() {
+        let err = io::Error::from(io::ErrorKind::PermissionDenied);
+        let msg = stdin_error_message(&err);
+        assert!(msg.contains("permission denied"));
+    }
+
+    #[test]
+    fn broken_pipe_exit_decision() {
+        assert!(should_exit_on_broken_pipe(io::ErrorKind::BrokenPipe));
+        assert!(!should_exit_on_broken_pipe(io::ErrorKind::Other));
+    }
+
+    #[test]
     fn integration_access_log_top_paths() {
         let config = Config {
             field: Some(7),
             delimiter: DEFAULT_DELIMITER,
             top: 3,
             interval_ms: 200,
+            color_enabled: true,
         };
         let input = include_str!("../samples/access.log");
         let counts = tally_from_input(input, &config);
@@ -497,6 +634,7 @@ mod tests {
             delimiter: DEFAULT_DELIMITER,
             top: 3,
             interval_ms: 200,
+            color_enabled: true,
         };
         let input = include_str!("../samples/app.log");
         let counts = tally_from_input(input, &config);

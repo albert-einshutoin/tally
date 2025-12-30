@@ -46,12 +46,17 @@ Goal: Make daily use comfortable and flexible.
 - [x] `q`: quit
 - [x] Separate render loop and input handling
 - [x] Define state transitions (run/pause/reset/quit)
+- [x] Enable/disable terminal raw mode safely
 
 #### v0.4.0: Stability & UX
-- [ ] Stronger error handling (permissions, broken pipes)
-- [ ] Richer `--help`
-- [ ] Color output (bar colors)
-- [ ] Improved layout for terminal width changes
+- [x] Stronger error handling (permissions, broken pipes)
+- [x] Richer `--help`
+- [x] Color output (bar colors)
+- [x] Improved layout for terminal width changes
+- [x] Redraw on terminal resize (SIGWINCH)
+- [x] Ensure raw mode is restored on unexpected errors
+- [x] NO_COLOR support (disable ANSI colors)
+- [x] Debounce resize redraws
 
 ---
 
@@ -159,12 +164,17 @@ Goal: Reliability under heavy load and long-running use.
 - [x] `q`: 即時終了
 - [x] 画面描画と入力処理のイベントループを分離
 - [x] 主要キー操作の状態遷移（run/pause/reset/quit）を定義
+- [x] 端末のraw modeを安全に有効/無効化
 
 #### v0.4.0: Stability & UX
-- [ ] エラーハンドリングの強化（権限エラー、パイプ切断時の挙動改善）
-- [ ] ヘルプメッセージ (`--help`) のリッチ化
-- [ ] カラー出力対応（バーチャートの色分けなど）
-- [ ] 端末幅に応じた表示最適化の強化
+- [x] エラーハンドリングの強化（権限エラー、パイプ切断時の挙動改善）
+- [x] ヘルプメッセージ (`--help`) のリッチ化
+- [x] カラー出力対応（バーチャートの色分けなど）
+- [x] 端末幅に応じた表示最適化の強化
+- [x] 端末リサイズ時の再描画（SIGWINCH）
+- [x] 予期せぬエラー時にraw modeを復元
+- [x] NO_COLOR対応（ANSIカラー無効化）
+- [x] リサイズ再描画のデバウンス
 
 ---
 
