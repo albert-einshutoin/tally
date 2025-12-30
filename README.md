@@ -22,10 +22,12 @@ Unlike `sort | uniq -c | sort -nr`, you can see “what’s hot right now” as 
 
 ```bash
 # Cargo (Rust)
-cargo install tally
+cargo install rtally
 
 # Homebrew / binary releases are planned
 ```
+
+Note: crates.io package name may differ from binary name. See `Cargo.toml`.
 
 ## Usage
 
@@ -151,10 +153,12 @@ cargo clippy
 
 ```bash
 # Cargo (Rust)
-cargo install tally
+cargo install rtally
 
 # 将来的に Homebrew / バイナリ配布を予定
 ```
+
+※ crates.ioのパッケージ名はバイナリ名と異なる場合があります（`Cargo.toml` を参照）。
 
 ## 使い方
 

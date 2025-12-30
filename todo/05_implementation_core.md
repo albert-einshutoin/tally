@@ -72,6 +72,9 @@ Without streaming aggregation and TUI, we cannot validate MVP value.
 - [x] NO_COLOR support to disable ANSI output
 - [x] Debounce resize redraws
 
+### Performance (v0.5.0)
+- [x] Reuse line buffers to reduce per-line allocations
+
 ## 7. Spec Notes
 
 ### Input / Extraction
@@ -160,6 +163,9 @@ MVPとして必要なストリーム集計とTUI表示が未整備だと、価�
 - [x] 狭い端末幅でのレイアウト調整
 - [x] NO_COLORでANSI出力を無効化
 - [x] リサイズ再描画のデバウンス
+
+### パフォーマンス（v0.5.0）
+- [x] 行バッファ再利用でアロケーションを削減
 
 ## 7. 仕様確定メモ
 

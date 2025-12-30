@@ -64,8 +64,12 @@ Goal: Make daily use comfortable and flexible.
 Goal: Make installation easy for everyone.
 
 #### v0.5.0: Release Automation
-- [ ] GitHub Releases with binaries
+- [ ] GitHub Releases with binaries (tag-triggered run)
 - [ ] Multi-platform builds (Linux/macOS/Windows)
+- [x] Release workflow added (GitHub Actions)
+- [x] Reuse line buffers to reduce per-line allocations
+- [x] crates.io metadata prepared (Cargo.toml/README/LICENSE)
+- [ ] crates.io publish (manual)
 
 #### v0.6.0: Package Managers
 - [ ] Homebrew tap
@@ -182,8 +186,12 @@ Goal: Reliability under heavy load and long-running use.
 **ゴール:** 誰でも簡単にインストールして使える状態にする。
 
 #### v0.5.0: Release Automation
-- [ ] GitHub Releases へのバイナリ自動アップロード
+- [ ] GitHub Releases へのバイナリ自動アップロード（タグ起動）
 - [ ] マルチプラットフォームビルド (Linux, macOS, Windows)
+- [x] GitHub ActionsのリリースWF追加
+- [x] 行バッファ再利用によるアロケーション削減
+- [x] crates.ioメタデータ準備（Cargo.toml/README/LICENSE）
+- [ ] crates.io公開（手動）
 
 #### v0.6.0: Package Managers
 - [ ] Homebrew Tap の作成 (`brew install tally`)

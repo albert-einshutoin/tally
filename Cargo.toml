@@ -1,7 +1,18 @@
 [package]
-name = "tally"
-version = "0.4.0"
+name = "rtally"  # 変更必須 (公開用パッケージ名)
+version = "0.5.0"
 edition = "2021"
+authors = ["Shuto Ide<einstein.4s.1110@gmail.com>"]
+description = "A real-time log stream analyzer and ranking tool similar to top command."
+license = "MIT"
+repository = "https://github.com/albert-einshutoin/tally"
+readme = "README.md"
+keywords = ["log", "cli", "analysis", "real-time", "tui"]
+categories = ["command-line-utilities", "development-tools"]
+
+[[bin]]
+name = "tally"
+path = "src/main.rs"
 
 [dependencies]
 ctrlc = "3"

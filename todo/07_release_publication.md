@@ -14,6 +14,7 @@ OSS release requires release flow, documentation, and support process.
 - [x] Define CHANGELOG policy
 - [x] Prepare Issue/PR templates
 - [x] Define post-release support/maintenance policy
+- [ ] Prepare crates.io publish (metadata/login/publish)
 
 ## 4. References
 - README.md
@@ -49,6 +50,7 @@ OSS公開にはリリースフロー、ドキュメント、サポート導線�
 - [x] CHANGELOG運用方針を決める
 - [x] Issue/PRテンプレートを用意する
 - [x] 公開後のサポート/メンテ方針を整理する
+- [ ] crates.io公開準備（メタデータ/ログイン/公開）
 
 ## 4. 参考・メモ (References)
 - README.md

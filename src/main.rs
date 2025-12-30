@@ -1,9 +1,10 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::env;
 use std::io::{self, BufRead, Write};
 use std::process;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{self, Receiver};
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -166,7 +167,10 @@ impl RunState {
 }
 
 fn process_stream(config: &Config, stop_flag: &Arc<AtomicBool>) -> HashMap<String, usize> {
-    let rx = spawn_reader(Arc::clone(stop_flag));
+    let (line_tx, line_rx) = mpsc::channel();
+    let (pool_tx, pool_rx) = mpsc::channel();
+    seed_buffer_pool(&pool_tx, 8);
+    spawn_reader(Arc::clone(stop_flag), pool_rx, line_tx);
     let mut counts: HashMap<String, usize> = HashMap::new();
     let mut last_render = Instant::now();
     let mut rendered_once = false;
@@ -179,9 +183,12 @@ fn process_stream(config: &Config, stop_flag: &Arc<AtomicBool>) -> HashMap<Strin
             break;
         }
 
-        while let Ok(line) = rx.try_recv() {
+        while let Ok(mut buffer) = line_rx.try_recv() {
+            let line = decode_line(&buffer);
             let trimmed = line.trim_end_matches(|c| c == '\n' || c == '\r');
             update_counts(trimmed, config, &mut counts);
+            buffer.clear();
+            let _ = pool_tx.send(buffer);
         }
 
         if event::poll(Duration::from_millis(50)).unwrap_or(false) {
@@ -257,12 +264,21 @@ fn process_stream(config: &Config, stop_flag: &Arc<AtomicBool>) -> HashMap<Strin
     counts
 }
 
-fn spawn_reader(stop_flag: Arc<AtomicBool>) -> Receiver<String> {
-    let (tx, rx) = mpsc::channel();
+fn seed_buffer_pool(pool_tx: &Sender<Vec<u8>>, count: usize) {
+    for _ in 0..count {
+        let _ = pool_tx.send(Vec::with_capacity(4096));
+    }
+}
+
+fn spawn_reader(
+    stop_flag: Arc<AtomicBool>,
+    pool_rx: Receiver<Vec<u8>>,
+    line_tx: Sender<Vec<u8>>,
+) {
     thread::spawn(move || {
         let stdin = io::stdin();
         let mut reader = stdin.lock();
-        let mut buffer: Vec<u8> = Vec::new();
+        let mut buffer: Vec<u8> = pool_rx.recv().unwrap_or_default();
         loop {
             if stop_flag.load(Ordering::SeqCst) {
                 break;
@@ -284,17 +300,16 @@ fn spawn_reader(stop_flag: Arc<AtomicBool>) -> Receiver<String> {
             if bytes == 0 {
                 break;
             }
-            let line = decode_line(&buffer);
-            if tx.send(line).is_err() {
+            if line_tx.send(buffer).is_err() {
                 break;
             }
+            buffer = pool_rx.recv().unwrap_or_default();
         }
     });
-    rx
 }
 
-fn decode_line(bytes: &[u8]) -> String {
-    String::from_utf8_lossy(bytes).into_owned()
+fn decode_line(bytes: &[u8]) -> Cow<'_, str> {
+    String::from_utf8_lossy(bytes)
 }
 
 fn stdin_error_message(err: &io::Error) -> &'static str {
